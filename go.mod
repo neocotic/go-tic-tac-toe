@@ -5,7 +5,7 @@ go 1.22
 require (
 	github.com/charmbracelet/bubbles v0.20.0
 	github.com/charmbracelet/bubbletea v1.1.1
-	github.com/charmbracelet/lipgloss v0.13.0
+	github.com/charmbracelet/lipgloss v0.13.1
 	github.com/lrstanley/bubblezone v0.0.0-20240914071701-b48c55a5e78e
 )
 
