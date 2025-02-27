@@ -1,9 +1,16 @@
 package tictactoe
 
-import "math"
+import (
+	"github.com/neocotic/go-tic-tac-toe/internal/bot"
+	"math"
+)
 
 // Bot represents a machine-controlled player of a Game whose sole purpose is to beat a human Player
 type Bot interface {
+	// MaxSize returns the maximum board size supported by the Bot
+	MaxSize() uint8
+	// Name returns the name of the Bot
+	Name() string
 	// Player returns the Player for which the Bot is playing
 	Player() Player
 	// Turn allows the Bot to check the Board for the best possible turn and returns the Cell representing that turns
@@ -18,6 +25,14 @@ type Bot interface {
 
 type easyBot struct {
 	player Player
+}
+
+func (b *easyBot) MaxSize() uint8 {
+	return bot.MaxSizeEasy
+}
+
+func (b *easyBot) Name() string {
+	return bot.NameEasy
 }
 
 func (b *easyBot) Player() Player {
@@ -35,6 +50,14 @@ func NewEasyBot(player Player) Bot {
 
 type normalBot struct {
 	player Player
+}
+
+func (b *normalBot) MaxSize() uint8 {
+	return bot.MaxSizeNormal
+}
+
+func (b *normalBot) Name() string {
+	return bot.NameNormal
 }
 
 func (b *normalBot) Player() Player {
@@ -67,6 +90,14 @@ func NewNormalBot(player Player) Bot {
 type hardBot struct {
 	opponent Player
 	player   Player
+}
+
+func (b *hardBot) MaxSize() uint8 {
+	return bot.MaxSizeHard
+}
+
+func (b *hardBot) Name() string {
+	return bot.NameHard
 }
 
 func (b *hardBot) Player() Player {
@@ -129,6 +160,14 @@ type (
 		depth, value int
 	}
 )
+
+func (b *impossibleBot) MaxSize() uint8 {
+	return bot.MaxSizeImpossible
+}
+
+func (b *impossibleBot) Name() string {
+	return bot.NameImpossible
+}
 
 func (b *impossibleBot) Player() Player {
 	return b.player

@@ -354,6 +354,8 @@ func (c *verticalCondition) findWinnerFromCol(board Board, col uint8) (player Pl
 var (
 	// ErrBot is returned if a Bot fails to take their turn
 	ErrBot = errors.New("bot turn failed")
+	// ErrBotMaxSizeExceeded is returned if a Bot is used in combination with a board whose size exceeds its maximum
+	ErrBotMaxSizeExceeded = errors.New("bot max board size exceeded")
 	// ErrConditionInvalid is returned if a Condition returns invalid information
 	ErrConditionInvalid = errors.New("invalid condition")
 	// ErrGameOver is returned if attempting to take a turn while not having StateAwaitingTurn
@@ -368,8 +370,12 @@ var (
 	ErrTurnInvalid = errors.New("invalid turn")
 )
 
-func fmtBotErr(err error) error {
-	return fmt.Errorf("%w: %w", ErrBot, err)
+func fmtBotErr(bot Bot, err error) error {
+	return fmt.Errorf("%q %w: %w", bot.Name(), ErrBot, err)
+}
+
+func fmtBotMaxSizeExceededErr(bot Bot) error {
+	return fmt.Errorf("%q %w: %v", bot.Name(), ErrBotMaxSizeExceeded, bot.MaxSize())
 }
 
 func fmtColOutOfBoundsErr(cell Cell, size uint8) error {
@@ -476,11 +482,11 @@ func (g *game) AllowBotTurn() (State, Player, error) {
 	}
 	cell, err := g.bot.Turn(g.board, g)
 	if err != nil {
-		return g.state, g.player, fmtBotErr(err)
+		return g.state, g.player, fmtBotErr(g.bot, err)
 	}
 	_, _, err = g.play(Turn{Cell: cell, Player: g.player}, true)
 	if err != nil {
-		err = fmtBotErr(err)
+		err = fmtBotErr(g.bot, err)
 	}
 	return g.state, g.player, err
 }
@@ -610,6 +616,7 @@ func MustStart(opts ...Option) Game {
 // Start returns a new Game, optionally customized by providing options.
 //
 // An error is returned in following cases:
+//   - ErrBotMaxSizeExceeded if a Bot is used in combination with a board size exceeding its maximum
 //   - ErrConditionInvalid if a winning Condition returns an invalid winning Player
 //   - ErrOptionInvalid if an Option is passed that was given an invalid argument
 func Start(opts ...Option) (Game, error) {
@@ -624,6 +631,10 @@ func Start(opts ...Option) (Game, error) {
 		if err := opt(g); err != nil {
 			return nil, err
 		}
+	}
+
+	if g.bot != nil && g.size > g.bot.MaxSize() {
+		return nil, fmtBotMaxSizeExceededErr(g.bot)
 	}
 
 	if g.board == nil {

@@ -9,11 +9,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
 	"github.com/neocotic/go-tic-tac-toe"
-	"math/rand"
+	"github.com/neocotic/go-tic-tac-toe/internal/bot"
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type keyMap struct {
@@ -50,9 +49,17 @@ type styles struct {
 	messageWin     lipgloss.Style
 }
 
-type allowBotTurnMsg struct{}
+type botTurnMsg struct {
+	err    error
+	player tictactoe.Player
+	state  tictactoe.State
+}
+
+type botTurnStartedMsg struct{}
 
 type model struct {
+	botTurn          bool
+	botTurnChan      chan botTurnMsg
 	cursorX, cursorY uint8
 	err              error
 	forfeit          bool
@@ -74,21 +81,26 @@ func (m model) Init() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
-	case allowBotTurnMsg:
+	case botTurnMsg:
 		if !m.gameOver {
-			var err error
-			m.err = nil
-			m.state, m.player, err = m.game.AllowBotTurn()
-			if err != nil {
-				// Built-in bots should never return cause errors to return
-				panic(err)
+			if msg.err != nil {
+				// Built-in bots should never cause errors to return
+				panic(msg.err)
 			}
-			m.gameOver = m.state != tictactoe.StateAwaitingTurn
+			m.botTurn = false
+			m.gameOver = msg.state != tictactoe.StateAwaitingTurn
+			m.player = msg.player
+			m.state = msg.state
+		}
+	case botTurnStartedMsg:
+		if !m.gameOver {
+			m.botTurn = true
+			m.err = nil
 		}
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, m.keys.choose):
-			if !m.gameOver {
+			if !(m.botTurn || m.gameOver) {
 				m.state, m.player, m.err = m.game.Play(tictactoe.Turn{
 					Cell: tictactoe.Cell{
 						Column: m.cursorX,
@@ -100,7 +112,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.allowBotTurn()
 			}
 		case key.Matches(msg, m.keys.up):
-			if !m.gameOver {
+			if !(m.botTurn || m.gameOver) {
 				m.err = nil
 				if m.cursorY == 0 {
 					m.cursorY = m.game.Size() - 1
@@ -109,7 +121,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case key.Matches(msg, m.keys.down):
-			if !m.gameOver {
+			if !(m.botTurn || m.gameOver) {
 				m.err = nil
 				if m.cursorY == m.game.Size()-1 {
 					m.cursorY = 0
@@ -118,7 +130,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case key.Matches(msg, m.keys.left):
-			if !m.gameOver {
+			if !(m.botTurn || m.gameOver) {
 				m.err = nil
 				if m.cursorX == 0 {
 					m.cursorX = m.game.Size() - 1
@@ -127,7 +139,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case key.Matches(msg, m.keys.right):
-			if !m.gameOver {
+			if !(m.botTurn || m.gameOver) {
 				m.err = nil
 				if m.cursorX == m.game.Size()-1 {
 					m.cursorX = 0
@@ -136,7 +148,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case key.Matches(msg, m.keys.restart):
-			return initModel(m.pack, m.zone), nil
+			nm := initModel(m.pack, m.zone)
+			return nm, nm.allowBotTurn()
 		case key.Matches(msg, m.keys.help):
 			m.help.ShowAll = !m.help.ShowAll
 		case key.Matches(msg, m.keys.quit):
@@ -145,14 +158,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseMsg:
 		switch msg.Action {
 		case tea.MouseActionMotion:
-			if !m.gameOver {
+			if !(m.botTurn || m.gameOver) {
 				if row, col, found := m.findCellZone(msg); found {
 					m.cursorX = col
 					m.cursorY = row
 				}
 			}
 		case tea.MouseActionRelease:
-			if !m.gameOver && msg.Button == tea.MouseButtonLeft {
+			if !(m.botTurn || m.gameOver) && msg.Button == tea.MouseButtonLeft {
 				if row, col, found := m.findCellZone(msg); found {
 					m.cursorX = col
 					m.cursorY = row
@@ -190,6 +203,8 @@ func (m model) View() string {
 		default:
 			panic(fmt.Errorf("unexpected final game state: %v", m.state))
 		}
+	} else if m.botTurn {
+		msg = m.styles.message.Render(m.renderPlayer() + " THINKING...")
 	} else {
 		msg = m.styles.message.Render("READY " + m.renderPlayer())
 	}
@@ -201,10 +216,7 @@ func (m model) allowBotTurn() tea.Cmd {
 	if !m.game.IsBotTurn() {
 		return nil
 	}
-	d := time.Millisecond * time.Duration(rand.Intn(500))
-	return tea.Tick(d, func(t time.Time) tea.Msg {
-		return allowBotTurnMsg{}
-	})
+	return tea.Batch(startBotTurn(m.botTurnChan, m.game), awaitBotTurn(m.botTurnChan))
 }
 
 func (m model) findCellZone(msg tea.MouseMsg) (uint8, uint8, bool) {
@@ -282,7 +294,7 @@ func (m model) renderPlayer() string {
 		return "PLAYER TWO"
 	default:
 		// Should never happen
-		return "UNKNOWN PLAYER"
+		return "PLAYER UNKNOWN"
 	}
 }
 
@@ -372,15 +384,16 @@ func initModel(pack tictactoe.Pack, zm *zone.Manager) model {
 	h.Styles.ShortKey.Bold(true)
 
 	return model{
-		game:    g,
-		help:    h,
-		keys:    km,
-		pack:    pack,
-		player:  p,
-		state:   s,
-		styles:  st,
-		zone:    zm,
-		zoneIds: make(map[string]struct{}),
+		botTurnChan: make(chan botTurnMsg),
+		game:        g,
+		help:        h,
+		keys:        km,
+		pack:        pack,
+		player:      p,
+		state:       s,
+		styles:      st,
+		zone:        zm,
+		zoneIds:     make(map[string]struct{}),
 	}
 }
 
@@ -391,15 +404,37 @@ const (
 	flagNamePlayer = "player"
 	flagNameSize   = "size"
 
-	flagInvalidReasonOutOfRange = "value out of range"
-	flagInvalidReasonParse      = "parse error"
+	flagInvalidReasonBotMaxSizeExceeded = "bot max board size exceeded"
+	flagInvalidReasonOutOfRange         = "value out of range"
+	flagInvalidReasonParse              = "parse error"
 )
+
+func awaitBotTurn(ch chan botTurnMsg) tea.Cmd {
+	return func() tea.Msg {
+		return <-ch
+	}
+}
 
 func handleInvalidFlag(name string, value any, reason string) {
 	fmt.Printf(`invalid value "%v" for flag -%s: %s
 `, value, name, reason)
 	flag.Usage()
 	os.Exit(2)
+}
+
+func startBotTurn(ch chan botTurnMsg, game tictactoe.Game) tea.Cmd {
+	return func() tea.Msg {
+		go func() {
+			state, player, err := game.AllowBotTurn()
+			ch <- botTurnMsg{
+				err:    err,
+				player: player,
+				state:  state,
+			}
+		}()
+
+		return botTurnStartedMsg{}
+	}
 }
 
 func main() {
@@ -436,20 +471,29 @@ func main() {
 		size = uint8(sizeFlag)
 	}
 
+	var maxSize uint8
 	pack := tictactoe.Pack{tictactoe.WithSize(size), tictactoe.WithStarterPlayer(player)}
 	switch botFlag {
 	case "":
 		// Do nothing
-	case "easy":
+	case bot.NameEasy:
 		pack = append(pack, tictactoe.WithEasyBot(tictactoe.PlayerTwo))
-	case "normal":
+		maxSize = bot.MaxSizeEasy
+	case bot.NameNormal:
 		pack = append(pack, tictactoe.WithNormalBot(tictactoe.PlayerTwo))
-	case "hard":
+		maxSize = bot.MaxSizeNormal
+	case bot.NameHard:
 		pack = append(pack, tictactoe.WithHardBot(tictactoe.PlayerTwo))
-	case "impossible":
+		maxSize = bot.MaxSizeHard
+	case bot.NameImpossible:
 		pack = append(pack, tictactoe.WithImpossibleBot(tictactoe.PlayerTwo))
+		maxSize = bot.MaxSizeImpossible
 	default:
 		handleInvalidFlag(flagNameBot, botFlag, flagInvalidReasonParse)
+	}
+
+	if botFlag != "" && maxSize > 0 && size > maxSize {
+		handleInvalidFlag(flagNameSize, sizeFlag, fmt.Sprintf("%q %s (%v)", botFlag, flagInvalidReasonBotMaxSizeExceeded, maxSize))
 	}
 
 	zm := zone.New()
