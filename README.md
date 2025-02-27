@@ -38,8 +38,8 @@ Usage of go-tic-tac-toe:
     	enable bot opponent with difficulty (e.g. "normal")
   -help
     	print help
-  -mouse
-    	enable mouse support
+  -no-mouse
+    	disable mouse support
   -player uint
     	starter player (default 1)
   -size uint

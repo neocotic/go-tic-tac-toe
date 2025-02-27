@@ -398,11 +398,11 @@ func initModel(pack tictactoe.Pack, zm *zone.Manager) model {
 }
 
 const (
-	flagNameBot    = "bot"
-	flagNameHelp   = "help"
-	flagNameMouse  = "mouse"
-	flagNamePlayer = "player"
-	flagNameSize   = "size"
+	flagNameBot     = "bot"
+	flagNameHelp    = "help"
+	flagNameNoMouse = "no-mouse"
+	flagNamePlayer  = "player"
+	flagNameSize    = "size"
 
 	flagInvalidReasonBotMaxSizeExceeded = "bot max board size exceeded"
 	flagInvalidReasonOutOfRange         = "value out of range"
@@ -439,15 +439,14 @@ func startBotTurn(ch chan botTurnMsg, game tictactoe.Game) tea.Cmd {
 
 func main() {
 	var (
-		botFlag              string
-		helpFlag, mouseFlag  bool
-		playerFlag, sizeFlag uint
+		botFlag               string
+		helpFlag, noMouseFlag bool
+		playerFlag, sizeFlag  uint
 	)
 
 	flag.StringVar(&botFlag, flagNameBot, "", `enable bot opponent with difficulty (e.g. "normal")`)
 	flag.BoolVar(&helpFlag, flagNameHelp, false, "print help")
-	// Couldn't quite get mouse alignment perfect so made it opt-in
-	flag.BoolVar(&mouseFlag, flagNameMouse, false, "enable mouse support")
+	flag.BoolVar(&noMouseFlag, flagNameNoMouse, false, "disable mouse support")
 	flag.UintVar(&playerFlag, flagNamePlayer, 1, "starter player")
 	flag.UintVar(&sizeFlag, flagNameSize, 3, "size of board")
 	flag.Parse()
@@ -497,13 +496,14 @@ func main() {
 	}
 
 	zm := zone.New()
-	zm.SetEnabled(mouseFlag)
+	zm.SetEnabled(!noMouseFlag)
 	defer zm.Close()
 
-	var opts []tea.ProgramOption
-	if mouseFlag {
-		opts = []tea.ProgramOption{tea.WithMouseAllMotion()}
+	opts := []tea.ProgramOption{tea.WithAltScreen()}
+	if !noMouseFlag {
+		opts = append(opts, tea.WithMouseAllMotion())
 	}
+
 	p := tea.NewProgram(initModel(pack, zm), opts...)
 	if _, err := p.Run(); err != nil {
 		panic(err)
