@@ -129,7 +129,7 @@ A list of contributors can be found in [AUTHORS.md](https://github.com/neocotic/
 
 ## License
 
-Copyright © 2024 neocotic
+Copyright © 2024-2025 neocotic
 
 See [LICENSE.md](https://github.com/neocotic/go-tic-tac-toe/raw/main/LICENSE.md) for more information on our MIT
 license.
