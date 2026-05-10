@@ -1,8 +1,9 @@
 package tictactoe
 
 import (
-	"github.com/neocotic/go-tic-tac-toe/internal/bot"
 	"math"
+
+	"github.com/airmrcr/go-tic-tac-toe/internal/bot"
 )
 
 // Bot represents a machine-controlled player of a Game whose sole purpose is to beat a human Player

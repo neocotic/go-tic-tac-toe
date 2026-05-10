@@ -3,16 +3,17 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
+	"strconv"
+	"strings"
+
+	"github.com/airmrcr/go-tic-tac-toe"
+	"github.com/airmrcr/go-tic-tac-toe/internal/bot"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
-	"github.com/neocotic/go-tic-tac-toe"
-	"github.com/neocotic/go-tic-tac-toe/internal/bot"
-	"os"
-	"strconv"
-	"strings"
 )
 
 type keyMap struct {
